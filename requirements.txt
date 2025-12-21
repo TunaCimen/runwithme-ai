@@ -1,0 +1,34 @@
+# Core scientific libraries
+numpy
+scipy
+matplotlib
+pillow
+scikit-learn
+
+# Deep learning
+torch
+torchvision
+
+# Data handling
+pandas
+
+# Progress bars
+ tqdm
+
+# For map visualization
+folium
+
+# For HTTP downloads (if used)
+httpx
+
+# For streaming zip extraction
+stream-unzip
+
+# For notebook work
+ipykernel
+
+# For Jupyter (optional, for local notebook use)
+jupyter
+
+# For large file handling (optional)
+git-lfs
