@@ -1,461 +1,254 @@
-# 📚 Guide: Adding New Features to the Modular Route Model
+# 🎯 Fully Modular Feature System
 
-This guide explains how to add new features (like elevation, weather, surface type, etc.) to the route similarity model using the modular architecture.
+**Add features by editing ONLY `modular_features.py` - no notebook changes required!**
 
-## 🎯 Overview
+## Philosophy: Zero Notebook Modifications
 
-The modular architecture uses **abstract base classes** to make adding features extremely easy. You only need to:
-1. Choose the right base class (Continuous, Categorical, or MultiValue)
-2. Create a one-line encoder subclass
-3. Extract the feature from your data
-4. Add it to the model initialization
+This system uses a **Feature Registry** that automatically handles everything:
+- ✅ Feature discovery
+- ✅ Encoder creation
+- ✅ Feature extraction from routes
+- ✅ Tensor conversion
+- ✅ Model architecture updates
+- ✅ Training integration
+- ✅ Similarity computation
 
-Everything else (fusion, training, similarity, normalization) works automatically!
-
----
-
-## 🏗️ Available Base Classes
-
-Three base classes handle all the boilerplate:
-
-| Base Class | Use For | Input Shape | Examples |
-|-----------|---------|-------------|----------|
-| `ContinuousFeatureEncoder` | Single numbers | `(batch, 1)` | pace, distance, elevation, temp, heart rate |
-| `CategoricalFeatureEncoder` | Categories (one-hot) | `(batch, num_cat)` | terrain, weather, surface, difficulty |
-| `MultiValueFeatureEncoder` | Multiple numbers | `(batch, num_vals)` | time (sin,cos), coordinates, wind |
+**When you add a feature to the registry, everything else happens automatically.**
 
 ---
 
-## 📋 Step-by-Step Guide
+## 🚀 Quick Start: Adding a New Feature
 
-### **Step 1: Create a New Encoder (Super Simple!)**
+Edit **only** `modular_features.py` (4 simple steps):
 
-Open `modular_features.py` and add ONE LINE of code:
+### Example: Adding Elevation
 
-#### Option A: Continuous Feature (Most Common)
 ```python
 # filepath: modular_features.py
 
-# For single scalar values: pace, distance, elevation, temperature, speed, etc.
+# 1. Create encoder class (one line!)
 class ElevationEncoder(ContinuousFeatureEncoder):
-    """Encoder for elevation gain (meters)"""
-    pass  # That's it! Inherits everything from base class
+    pass
+
+# 2. Create extraction function
+def extract_elevation(route: Dict) -> float:
+    """Extract elevation gain from route"""
+    return route.get('elevation_gain', 0.0)
+
+# 3. Create conversion function  
+def elevation_to_tensor(elevation: float) -> torch.Tensor:
+    """Convert elevation to tensor"""
+    return torch.tensor([elevation], dtype=torch.float32)
+
+# 4. Register the feature
+FeatureRegistry.register('elevation', ElevationEncoder, extract_elevation, elevation_to_tensor)
 ```
 
-#### Option B: Categorical Feature
+**That's it!** Re-run the notebook and elevation will automatically:
+- ✅ Be extracted from routes
+- ✅ Get its own encoder
+- ✅ Be included in training
+- ✅ Show up in similarity results
+- ✅ Appear in visualizations
+
+**No notebook code changes needed!**
+
+---
+
+## 🏗️ Base Classes
+
+Choose the appropriate base class for your feature:
+
+| Base Class | Use For | Example |
+|-----------|---------|---------|
+| `ContinuousFeatureEncoder` | Single numbers | pace, distance, elevation, temperature |
+| `CategoricalFeatureEncoder` | Categories | terrain, weather, surface type |
+| `MultiValueFeatureEncoder` | Multiple values | time (sin, cos), coordinates |
+
+---
+
+## 📚 More Examples
+
+### Example 1: Weather (Categorical)
+
 ```python
 # filepath: modular_features.py
 
-# For categories: terrain, weather, surface type, difficulty, etc.
+WEATHER_TYPES = ['sunny', 'cloudy', 'rainy', 'snowy']
+
 class WeatherEncoder(CategoricalFeatureEncoder):
-    """Encoder for weather condition"""
-    def __init__(self, embedding_dim=32):
-        super(WeatherEncoder, self).__init__(
-            num_categories=5,  # sunny, cloudy, rainy, snowy, foggy
-            embedding_dim=embedding_dim
-        )
-```
-
-#### Option C: Multi-Value Feature
-```python
-# filepath: modular_features.py
-
-# For multiple values: coordinates (lat, lon), wind (speed, direction), etc.
-class WindEncoder(MultiValueFeatureEncoder):
-    """Encoder for wind (speed, direction_sin, direction_cos)"""
-    def __init__(self, embedding_dim=32):
-        super(WindEncoder, self).__init__(
-            num_values=3,  # 3 input values
-            embedding_dim=embedding_dim
-        )
-```
-
-#### Option D: Custom Architecture (Advanced)
-```python
-# filepath: modular_features.py
-
-# Customize hidden layer size and dropout if needed
-class HeartRateEncoder(ContinuousFeatureEncoder):
-    """Encoder for heart rate with deeper network"""
-    def __init__(self, embedding_dim=32):
-        super(HeartRateEncoder, self).__init__(
-            embedding_dim=embedding_dim,
-            hidden_dim=128,  # Larger hidden layer (default: 64)
-            dropout=0.3       # More dropout (default: 0.2)
-        )
-```
-
-**🎉 No need to write:**
-- ✅ `forward()` method
-- ✅ Shape handling logic
-- ✅ L2 normalization
-- ✅ BatchNorm, Dropout, ReLU layers
-
-**Everything is inherited from the base class!**
-
----
-
-### **Step 2: Extract Feature from Data**
-
-In your notebook, modify the `HybridDataset` class to extract your new feature:
-
-#### 2a. Add Feature Extraction Function (if needed)
-
-```python
-def extract_your_feature(route):
-    """
-    Extract your feature from the route data.
-    
-    Args:
-        route: Dictionary containing route data
-    
-    Returns:
-        Processed feature value (float or category)
-    """
-    # Example: Extract elevation gain
-    elevation = route.get('ElevationGain', 0)
-    return elevation / 100.0  # Normalize to ~100s of meters
-    
-    # Example: Extract categorical feature
-    # return route.get('SurfaceType', 'unknown')
-```
-
-#### 2b. Update Dataset `__init__` Method
-
-Find the `HybridDataset.__init__` method and add your feature to the route dictionary:
-
-```python
-# In HybridDataset.__init__, around line 1370
-self.routes.append({
-    'img': img,
-    'pace': route['PaceMinPerKm'],
-    'terrain': terrain,
-    'distance': route['Distance'] / 1000.0,
-    'time_sin': time_feat['time_sin'],
-    'time_cos': time_feat['time_cos'],
-    'time_slot': time_feat['time_slot'],
-    'your_feature': extract_your_feature(route)  # ADD THIS LINE
-})
-```
-
-#### 2c. Update Dataset `__getitem__` Method
-
-Add your feature to both `features1` and `features2` dictionaries:
-
-```python
-# In HybridDataset.__getitem__, around line 1395
-features1 = {
-    'pace': torch.tensor([route1['pace']], dtype=torch.float32),
-    'terrain': self.terrain_to_onehot(route1['terrain']),
-    'distance': torch.tensor([route1['distance']], dtype=torch.float32),
-    'time': torch.tensor([route1['time_sin'], route1['time_cos']], dtype=torch.float32),
-    'your_feature': torch.tensor([route1['your_feature']], dtype=torch.float32)  # ADD THIS
-}
-
-# Do the same for features2
-features2 = {
-    'pace': torch.tensor([route2['pace']], dtype=torch.float32),
-    'terrain': self.terrain_to_onehot(route2['terrain']),
-    'distance': torch.tensor([route2['distance']], dtype=torch.float32),
-    'time': torch.tensor([route2['time_sin'], route2['time_cos']], dtype=torch.float32),
-    'your_feature': torch.tensor([route2['your_feature']], dtype=torch.float32)  # AND THIS
-}
-```
-
----
-
-### **Step 3: Add Encoder to Model**
-
-In the training cell (around line 1420), add your encoder to the `encoders` dictionary:
-
-```python
-# In the training cell
-encoders = {
-    'pace': PaceEncoder(embedding_dim=32),
-    'terrain': TerrainEncoder(num_terrains=9, embedding_dim=32),
-    'distance': DistanceEncoder(embedding_dim=32),
-    'time': TimeEncoder(embedding_dim=32),
-    'your_feature': YourFeatureEncoder(embedding_dim=32),  # ADD THIS LINE
-}
-```
-
-**⚠️ Important:** Make sure to reload the module if you edited `modular_features.py`:
-
-```python
-import importlib
-import modular_features
-importlib.reload(modular_features)
-```
-
----
-
-### **Step 4: Update Visualization (Optional)**
-
-To display your feature in the similarity results, update the `format_feature_info` function:
-
-```python
-# In the test cell, around line 1490
-def format_feature_info(route):
-    """Format route feature values as a readable string"""
-    time_hour = int(np.arctan2(route['time_sin'], route['time_cos']) / (2 * np.pi) * 24)
-    if time_hour < 0:
-        time_hour += 24
-    return {
-        'terrain': route['terrain'].title(),
-        'pace': f"{route['pace']:.1f} min/km",
-        'distance': f"{route['distance']:.1f} km",
-        'time': f"~{time_hour:02d}:00",
-        'your_feature': f"{route['your_feature']:.1f} units"  # ADD THIS LINE
-    }
-```
-
-Then update the visualization title to include it:
-
-```python
-# Around line 1510
-title_lines = [
-    f'Match #{i}: Route #{similar_idx} (Overall: {sim_overall:.0f}%)',
-    f"Terrain: {match_info['terrain']} ({similarities['terrain'][similar_idx]:.0f}%)",
-    f"Pace: {match_info['pace']} ({similarities['pace'][similar_idx]:.0f}%)",
-    f"Dist: {match_info['distance']} ({similarities['distance'][similar_idx]:.0f}%)",
-    f"Time: {match_info['time']} ({similarities['time'][similar_idx]:.0f}%)",
-    f"YourFeature: {match_info['your_feature']} ({similarities['your_feature'][similar_idx]:.0f}%)"  # ADD THIS
-]
-```
-
----
-
-## 🎉 That's It!
-
-**What happens automatically:**
-- ✅ Your feature is encoded to a 32-dim embedding
-- ✅ Combined with other features in the fusion layer
-- ✅ Used in contrastive loss during training
-- ✅ Similarity scores computed for testing
-- ✅ Visualization shows the new feature
-
-**No changes needed to:**
-- Fusion layer architecture
-- Training loop
-- Loss function
-- Similarity calculation
-- Model forward pass
-
----
-
-## 📝 Complete Example: Adding Elevation
-
-Here's a complete example adding elevation gain as a feature:
-
-### 1. Create Encoder (Just One Line!)
-
-```python
-# filepath: modular_features.py
-class ElevationEncoder(ContinuousFeatureEncoder):
-    """Encoder for elevation gain (in meters)"""
-    pass  # That's it!
-```
-
-### 2. Extract Feature
-
-```python
-# In notebook, before HybridDataset
-def extract_elevation(route):
-    """Extract and normalize elevation gain"""
-    return route.get('ElevationGain', 0) / 100.0  # Normalize to ~100s of meters
-```
-
-### 3. Update Dataset
-
-```python
-# In HybridDataset.__init__
-self.routes.append({
-    'img': img,
-    'pace': route['PaceMinPerKm'],
-    'terrain': terrain,
-    'distance': route['Distance'] / 1000.0,
-    'time_sin': time_feat['time_sin'],
-    'time_cos': time_feat['time_cos'],
-    'time_slot': time_feat['time_slot'],
-    'elevation': extract_elevation(route)  # NEW
-})
-
-# In HybridDataset.__getitem__
-features1['elevation'] = torch.tensor([route1['elevation']], dtype=torch.float32)
-features2['elevation'] = torch.tensor([route2['elevation']], dtype=torch.float32)
-```
-
-### 4. Add to Model
-
-```python
-# Reload module first!
-import importlib
-import modular_features
-importlib.reload(modular_features)
-
-# Then update encoders
-encoders = {
-    'pace': PaceEncoder(embedding_dim=32),
-    'terrain': TerrainEncoder(num_terrains=9, embedding_dim=32),
-    'distance': DistanceEncoder(embedding_dim=32),
-    'time': TimeEncoder(embedding_dim=32),
-    'elevation': ElevationEncoder(embedding_dim=32),  # NEW
-}
-```
-
-### 5. Train & Test!
-
-```python
-# Re-run the training cell - that's it!
-# Your elevation feature is now part of the model
-```
-
----
-
-## 🚀 Advanced: Adding Multiple Features at Once
-
-You can add multiple features in one go - each is just one line!
-
-```python
-# filepath: modular_features.py
-
-# 1. Create multiple encoders (super simple!)
-class WeatherEncoder(CategoricalFeatureEncoder):
-    """Encoder for weather conditions"""
-    def __init__(self, embedding_dim=32):
-        super().__init__(num_categories=5, embedding_dim=embedding_dim)
-
-class SurfaceEncoder(CategoricalFeatureEncoder):
-    """Encoder for surface type"""
     def __init__(self, embedding_dim=32):
         super().__init__(num_categories=4, embedding_dim=embedding_dim)
 
-class TemperatureEncoder(ContinuousFeatureEncoder):
-    """Encoder for temperature"""
+def extract_weather(route: Dict) -> str:
+    return route.get('weather', 'sunny')
+
+def weather_to_tensor(weather: str) -> torch.Tensor:
+    idx = WEATHER_TYPES.index(weather) if weather in WEATHER_TYPES else 0
+    one_hot = torch.zeros(len(WEATHER_TYPES), dtype=torch.float32)
+    one_hot[idx] = 1.0
+    return one_hot
+
+FeatureRegistry.register('weather', WeatherEncoder, extract_weather, weather_to_tensor)
+```
+
+### Example 2: Heart Rate (Continuous)
+
+```python
+# filepath: modular_features.py
+
+class HeartRateEncoder(ContinuousFeatureEncoder):
     pass
 
-# 2. Extract all features in dataset
-self.routes.append({
-    # ... existing features ...
-    'weather': extract_weather(route),
-    'surface': extract_surface(route),
-    'temperature': extract_temperature(route)
-})
+def extract_heart_rate(route: Dict) -> float:
+    return route.get('avg_heart_rate', 140.0)
 
-# 3. Add all to model
-encoders = {
-    # ... existing encoders ...
-    'weather': WeatherEncoder(embedding_dim=32),
-    'surface': SurfaceEncoder(embedding_dim=32),
-    'temperature': TemperatureEncoder(embedding_dim=32),
-}
+def heart_rate_to_tensor(hr: float) -> torch.Tensor:
+    return torch.tensor([hr], dtype=torch.float32)
+
+FeatureRegistry.register('heart_rate', HeartRateEncoder, extract_heart_rate, heart_rate_to_tensor)
 ```
+
+### Example 3: Start Location (Multi-Value)
+
+```python
+# filepath: modular_features.py
+
+class StartLocationEncoder(MultiValueFeatureEncoder):
+    def __init__(self, embedding_dim=32):
+        super().__init__(num_values=2, embedding_dim=embedding_dim)  # lat, lon
+
+def extract_start_location(route: Dict) -> Tuple[float, float]:
+    geometry = route.get('geometry', [])
+    if geometry:
+        return geometry[0][1], geometry[0][0]  # lat, lon
+    return 0.0, 0.0
+
+def start_location_to_tensor(location: Tuple[float, float]) -> torch.Tensor:
+    lat, lon = location
+    # Normalize to [-1, 1] range (approximate)
+    lat_norm = lat / 90.0
+    lon_norm = lon / 180.0
+    return torch.tensor([lat_norm, lon_norm], dtype=torch.float32)
+
+FeatureRegistry.register('start_location', StartLocationEncoder, extract_start_location, start_location_to_tensor)
+```
+
+---
+
+## 🎓 How It Works
+
+### 1. Feature Registry
+The `FeatureRegistry` class stores all feature definitions:
+```python
+FeatureRegistry.register(
+    name='pace',                    # Feature name
+    encoder_class=PaceEncoder,       # Encoder class (not instance!)
+    extractor=extract_pace,          # Function: route → value
+    tensor_converter=pace_to_tensor  # Function: value → tensor
+)
+```
+
+### 2. Automatic Dataset Integration
+`HybridDatasetModular` uses the registry:
+```python
+# In __getitem__:
+features_raw = FeatureRegistry.extract_features(route)  # Call all extractors
+features = FeatureRegistry.convert_to_tensors(features_raw)  # Convert all to tensors
+```
+
+### 3. Automatic Model Creation
+`MetadataEncoderModular` creates encoders automatically:
+```python
+def __init__(self, fusion_dim=128, embedding_dim=32):
+    # Automatically create ALL registered encoders
+    self.encoders = nn.ModuleDict(FeatureRegistry.create_encoders(embedding_dim))
+```
+
+### 4. Automatic Similarity
+The test cell automatically computes similarities for all features:
+```python
+for feat_name in FeatureRegistry.get_all_features():
+    similarities[feat_name] = compute_similarity(embeddings[feat_name])
+```
+
+---
+
+## 🔧 Advanced: Custom Architecture
+
+If you need a custom encoder architecture, override `_build_encoder()`:
+
+```python
+class ComplexFeatureEncoder(ContinuousFeatureEncoder):
+    def _build_encoder(self):
+        return nn.Sequential(
+            nn.Linear(1, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, self.embedding_dim)
+        )
+```
+
+---
+
+## ✅ Best Practices
+
+1. **Naming**: Use descriptive names (`pace`, `elevation`, `heart_rate`)
+2. **Defaults**: Provide sensible defaults in extractors
+3. **Normalization**: Normalize features to similar ranges
+4. **Documentation**: Add docstrings to your encoders
+5. **Testing**: Run a quick test after adding features
 
 ---
 
 ## 🐛 Troubleshooting
 
-**Error: "KeyError: 'your_feature'"**
-- Make sure you added the feature to BOTH `features1` and `features2` in `__getitem__`
+### Feature not showing up?
+- Check `FeatureRegistry.register()` was called
+- Verify extractor returns the right type
+- Make sure tensor converter returns `torch.Tensor`
 
-**Error: "RuntimeError: mat1 and mat2 shapes cannot be multiplied"**
-- Check that your encoder input size matches the feature shape
-- Use `.unsqueeze(1)` to convert `(batch,)` to `(batch, 1)`
+### Shape errors?
+- Continuous: return `(1,)` tensor
+- Categorical: return `(num_categories,)` tensor
+- Multi-value: return `(num_values,)` tensor
 
-**Error: "AttributeError: module 'modular_features' has no attribute 'YourEncoder'"**
-- You forgot to reload the module! Add `importlib.reload(modular_features)` before training
-
-**Feature similarity always 0%**
-- Check that your feature values are not all the same
-- Make sure you're normalizing properly (divide by reasonable scale)
-
----
-
-## 📊 Testing Your New Feature
-
-After adding a feature, test that it works:
-
-```python
-# Check that dataset loads correctly
-print(f"Sample route features: {hybrid_dataset.routes[0].keys()}")
-
-# Check that encoder produces correct shape
-test_encoder = YourFeatureEncoder(embedding_dim=32)
-test_input = torch.tensor([[5.0]])
-test_output = test_encoder(test_input)
-print(f"Encoder output shape: {test_output.shape}")  # Should be (1, 32)
-
-# Check that similarity is computed
-print(f"Feature similarities available: {list(similarities.keys())}")
-```
+### Missing data?
+- Add default values in extractors
+- Handle missing keys with `.get(key, default)`
 
 ---
 
-## 💡 Best Practices
+## 📊 Current Features
 
-1. **Normalize your features:** Divide by a reasonable scale (e.g., elevation by 100, temperature by 50)
-2. **Use consistent embedding_dim:** Stick to 32 for all feature encoders
-3. **Choose the right base class:**
-   - Single value? → `ContinuousFeatureEncoder`
-   - Category? → `CategoricalFeatureEncoder`
-   - Multiple values? → `MultiValueFeatureEncoder`
-4. **Handle missing data:** Use `.get('feature', default_value)` when extracting
-5. **Reload the module:** Always `importlib.reload(modular_features)` after editing
-6. **Test incrementally:** Add one feature at a time and verify it works
+The system comes with 4 features out of the box:
 
----
-
-## 🎓 Understanding the Architecture
-
-### How Base Classes Work
-
-```
-BaseFeatureEncoder (abstract)
-├── Provides: forward(), _handle_input_shape(), L2 normalization
-├── Requires: _build_encoder() implementation
-│
-├── ContinuousFeatureEncoder
-│   └── _build_encoder(): 1 → 64 → BN → ReLU → Dropout → embedding_dim
-│
-├── CategoricalFeatureEncoder  
-│   └── _build_encoder(): num_cat → 64 → BN → ReLU → Dropout → embedding_dim
-│
-└── MultiValueFeatureEncoder
-    └── _build_encoder(): num_vals → 64 → BN → ReLU → Dropout → embedding_dim
-```
-
-### Feature Flow
-
-```
-Route Data → Feature Extraction → Individual Encoders → Fusion → Final Embedding
-                                          ↓
-                                   32-dim each
-                                   (via base class)
-                                          ↓
-                                   Concatenated
-                                          ↓
-                                   Fusion Layer
-                                          ↓
-                                   128-dim final
-```
-
-**Benefits:**
-- ✅ No boilerplate code - base classes handle everything
-- ✅ Consistent architecture across all features
-- ✅ Easy to customize (override parameters)
-- ✅ Type safety - all encoders have same interface
-- ✅ Less bugs - reuse tested code
+| Feature | Type | Encoder | Description |
+|---------|------|---------|-------------|
+| `pace` | Continuous | `PaceEncoder` | Running pace (min/km) |
+| `terrain` | Categorical | `TerrainEncoder` | Terrain type (9 categories) |
+| `distance` | Continuous | `DistanceEncoder` | Route distance (km) |
+| `time` | Multi-Value | `TimeEncoder` | Time of day (sin, cos) |
 
 ---
 
-## 📚 Further Reading
+## 🎯 Summary
 
-- See `modular_features.py` for existing encoder implementations
-- Check the notebook cell comments for detailed explanations
-- Read the model architecture in `HybridRouteModelModular`
+**To add a feature:**
+1. Edit `modular_features.py`
+2. Create encoder class (inherit from base)
+3. Create `extract_feature()` function
+4. Create `feature_to_tensor()` function
+5. Call `FeatureRegistry.register()`
 
----
+**No changes needed in:**
+- ❌ Notebook cells
+- ❌ Dataset class
+- ❌ Training loop
+- ❌ Testing code
+- ❌ Visualization code
 
-**Happy feature engineering! 🚀**
-
-If you have questions, check the troubleshooting section or review existing encoder implementations in `modular_features.py`.
+**Everything is automatic!** 🚀
